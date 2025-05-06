@@ -27,6 +27,17 @@ public class UsuarioDTO {
         }
     }
 
+    public UsuarioDTO(BigDecimal saldo, String senha, String cpf) {
+        this.cpf = cpf;
+        this.saldo = saldo;
+        this.senha = senha;
+    }
+
+    public UsuarioDTO(String cpf, BigDecimal saldo) {
+        this.cpf = cpf;
+        this.saldo = saldo;
+    }
+
     public UsuarioDTO(String nome, String cpf, String senha) {
         this.nome = nome;
         this.cpf = cpf;

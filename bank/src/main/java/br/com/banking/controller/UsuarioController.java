@@ -1,6 +1,8 @@
 package br.com.banking.controller;
 
 import br.com.banking.dtos.UsuarioDTO;
+import br.com.banking.entity.Usuario;
+import br.com.banking.repository.UsuarioRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.RuntimeService;
 import org.camunda.bpm.engine.TaskService;
@@ -8,22 +10,25 @@ import org.camunda.bpm.engine.runtime.ProcessInstance;
 import org.camunda.bpm.engine.task.Task;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @RestController
 public class UsuarioController {
     private final RuntimeService runtimeService;
     private final TaskService taskService;
+    private final UsuarioRepository usuarioRepository;
 
-    public UsuarioController(RuntimeService runtimeService, TaskService taskService) {
+    public UsuarioController(RuntimeService runtimeService, TaskService taskService, UsuarioRepository usuarioRepository) {
         this.runtimeService = runtimeService;
         this.taskService = taskService;
+        this.usuarioRepository = usuarioRepository;
     }
 
     @PostMapping("/auth/cadastrar")
@@ -81,11 +86,11 @@ public class UsuarioController {
                     )
             );
 
-            Task firstTask = taskService.createTaskQuery()
+            Task primeiraTask = taskService.createTaskQuery()
                     .processInstanceId(instance.getId())
                     .singleResult();
-            if (firstTask != null) {
-                taskService.complete(firstTask.getId());
+            if (primeiraTask != null) {
+                taskService.complete(primeiraTask.getId());
             }
 
             Task loginTask = taskService.createTaskQuery()
@@ -103,7 +108,7 @@ public class UsuarioController {
                 String message = (String) processVariables.get("message");
                 return ResponseEntity.ok(Map.of(
                         "token", token,
-                        "message", message != null ? message : "Login realizado com sucesso!"
+                        "mensagem", message != null ? message : "Login realizado com sucesso!"
                 ));
             } else {
                 String errorMessage = (String) processVariables.get("loginError");
@@ -112,9 +117,77 @@ public class UsuarioController {
             }
 
         } catch (Exception e) {
-            log.error("Erro no processo de login", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Erro no login: " + e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/usuario/depositar")
+    public ResponseEntity<?> deposito(@RequestBody UsuarioDTO request, @RequestHeader("Authorization") String token) {
+        try {
+            ProcessInstance instance = runtimeService.createProcessInstanceQuery()
+                    .variableValueEquals("cpf", request.getCpf())
+                    .active()
+                    .singleResult();
+
+            if (instance == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of(
+                                "erro", "Sessão não encontrada. Faça login novamente"
+                        ));
+            }
+
+            Task taskAtual = taskService.createTaskQuery()
+                    .processInstanceId(instance.getId())
+                    .taskDefinitionKey("Activity_14e0gpi")
+                    .singleResult();
+
+            if (taskAtual == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of(
+                                "erro", "Nenhuma tarefa pendente encontrada"
+                        ));
+            }
+
+            Map<String, Object> variaveis = new HashMap<>();
+            variaveis.put("opcaoBanco", 1);
+            variaveis.put("cpf", request.getCpf());
+            variaveis.put("senha", request.getSenha());
+            variaveis.put("quantidade", request.getSaldo().toBigInteger().longValue());
+
+            taskService.complete(taskAtual.getId(), variaveis);
+
+            Map<String, Object> processVariables = runtimeService.getVariables(instance.getId());
+            System.out.println("Variáveis do processo após a tarefa: " + processVariables);
+
+            if (processVariables.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("erro", "Nenhuma informação do cliente recuperada"));
+            }
+
+            String cpf = (String) processVariables.get("cpf");
+            Long saldo = (Long) processVariables.get("quantidade");
+
+            Optional<Usuario> usuarioOpt = usuarioRepository.findByCpf(request.getCpf());
+
+            Task taskDados = taskService.createTaskQuery()
+                    .processInstanceId(instance.getId())
+                    .taskDefinitionKey("Activity_1oiyjaz")
+                    .singleResult();
+            if (taskDados != null) {
+                taskService.complete(taskDados.getId(), variaveis);
+            }
+
+            return ResponseEntity.status(HttpStatus.ACCEPTED)
+                    .body(Map.of(
+                            "cpf", cpf,
+                            "novo_saldo", usuarioOpt.get().getSaldo().add(BigDecimal.valueOf(saldo))
+                    ));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erro no depósito: " + e.getMessage()));
         }
     }
 }

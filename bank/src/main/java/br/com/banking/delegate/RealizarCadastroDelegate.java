@@ -23,6 +23,5 @@ public class RealizarCadastroDelegate implements JavaDelegate {
         UsuarioDTO usuarioDTO = new UsuarioDTO(nome, cpf, senha);
 
         usuarioService.cadastrar(usuarioDTO);
-        System.out.println("usuario cadastrado com sucesso!");
     }
 }

@@ -35,7 +35,7 @@ public class SecurityConfiguration {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configure(http))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**", "/camunda/**").permitAll()
+                        .requestMatchers("/auth/**", "/camunda/**", "/usuario/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
