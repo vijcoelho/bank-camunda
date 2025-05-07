@@ -32,6 +32,7 @@
       <bpmn:outgoing>Flow_1rzzzyr</bpmn:outgoing>
     </bpmn:serviceTask>
     <bpmn:endEvent id="Event_1c1uz3k">
+      <bpmn:extensionElements />
       <bpmn:incoming>Flow_1rzzzyr</bpmn:incoming>
     </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_1rzzzyr" sourceRef="cadastrar_usuario" targetRef="Event_1c1uz3k" />
